@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 TTL = 3600
-MIMES = {'video/mp4', 'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/ogg', 'audio/mp4'}
+MIMES = {'video/mp4', 'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/flac', 'audio/ogg', 'audio/mp4', 'image/png', 'image/jpeg', 'image/webp'}
 
 
 class MediaServer(ThreadingHTTPServer):
@@ -99,11 +99,11 @@ class Handler(BaseHTTPRequestHandler):
                     digest.update(chunk)
                     temp.write(chunk)
                     remaining -= len(chunk)
-            valid = head[4:8] == b'ftyp' if mime in {'video/mp4', 'audio/mp4'} else (
+            valid = head[:8] == b'\x89PNG\r\n\x1a\n' if mime == 'image/png' else (head[:2] == b'\xff\xd8' if mime == 'image/jpeg' else (head[:4] == b'RIFF' and head[8:12] == b'WEBP' if mime == 'image/webp' else (head[4:8] == b'ftyp' if mime in {'video/mp4', 'audio/mp4'} else (
                 head[:4] == b'RIFF' and head[8:12] == b'WAVE' if mime in {'audio/wav', 'audio/x-wav'} else
                 head[:4] == b'fLaC' if mime == 'audio/flac' else
                 head[:4] == b'OggS' if mime == 'audio/ogg' else
-                head[:3] == b'ID3' or len(head) > 1 and head[0] == 255 and head[1] & 224 == 224)
+                head[:3] == b'ID3' or len(head) > 1 and head[0] == 255 and head[1] & 224 == 224))))
             if not valid:
                 return self.reply(415)
             digest = digest.hexdigest()
@@ -173,6 +173,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('Accept-Ranges', 'bytes')
         self.send_header('Cache-Control', 'private, no-store')
         self.send_header('X-Content-Type-Options', 'nosniff')
+        self.send_header('Content-Security-Policy', "default-src 'none'; sandbox")
         self.send_header('Connection', 'close')
         if partial:
             self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
